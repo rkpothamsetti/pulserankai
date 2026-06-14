@@ -58,6 +58,7 @@ function AppPage() {
   });
   const [selectedId, setSelectedId] = useState<string>("c4");
   const [tab, setTab] = useState<Tab>("profile");
+  const [shortlistedIds, setShortlistedIds] = useState<string[]>([]);
 
   const parsedJd = useMemo(() => {
     return parseJobDescription(jd);
@@ -86,15 +87,49 @@ function AppPage() {
     }));
   };
 
+  const toggleShortlist = (id: string) => {
+    setShortlistedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const exportShortlist = () => {
+    if (shortlistedIds.length === 0) {
+      alert("No candidates have been shortlisted yet.");
+      return;
+    }
+    const shortlistedCandidates = tournamentResults.filter(r => shortlistedIds.includes(r.candidate.id));
+    
+    const headers = ["Rank", "Name", "Title", "Location", "ELO Rating", "Composite Score"];
+    const rows = shortlistedCandidates.map((r, index) => [
+      index + 1,
+      `"${r.candidate.name}"`,
+      `"${r.candidate.title}"`,
+      `"${r.candidate.location}"`,
+      r.eloRating,
+      r.breakdown.overallWeightedScore
+    ]);
+    
+    const csvContent = [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `pulserank-shortlist-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="min-h-screen bg-paper text-ink font-sans">
+    <div className="min-h-screen bg-paper text-ink font-sans flex flex-col">
       <Nav />
 
       {/* Workspace header */}
-      <div className="border-b border-rule bg-paper-deep">
+      <div className="border-b border-rule bg-paper-deep shrink-0">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10 py-6 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <div className="eyebrow text-vermillion">Workspace</div>
+            <div className="eyebrow text-vermillion font-semibold">Workspace</div>
             <h1 className="font-display text-3xl mt-1">Reasoning Tournament <em className="italic">№ 27</em></h1>
           </div>
           <div className="flex items-center gap-6 text-sm">
@@ -102,34 +137,39 @@ function AppPage() {
               <span className="h-2 w-2 rounded-full bg-vermillion animate-pulse" />
               <span className="text-muted-foreground">Live · {tournamentResults.length} candidates</span>
             </div>
-            <button className="ink-button text-sm">Export shortlist <ArrowUpRight className="h-4 w-4" /></button>
+            <button 
+              onClick={exportShortlist}
+              className="ink-button text-sm cursor-pointer"
+            >
+              Export shortlist ({shortlistedIds.length}) <ArrowUpRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1400px] px-6 lg:px-10 py-8 grid grid-cols-12 gap-6">
+      <div className="mx-auto max-w-[1400px] w-full px-6 lg:px-10 py-8 grid grid-cols-12 gap-6 flex-1 lg:h-[calc(100vh-170px)] lg:min-h-[650px] overflow-hidden">
         {/* LEFT — JD + weights */}
-        <aside className="col-span-12 lg:col-span-3 space-y-6">
-          <section className="border border-rule bg-paper">
-            <header className="flex items-center justify-between px-4 py-3 border-b border-rule">
-              <span className="eyebrow text-xs uppercase tracking-wider font-mono">Job description</span>
+        <aside className="col-span-12 lg:col-span-3 flex flex-col gap-6 h-full overflow-hidden">
+          <section className="border border-rule bg-paper flex flex-col flex-1 overflow-hidden min-h-[220px]">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-rule shrink-0">
+              <span className="eyebrow text-xs uppercase tracking-wider font-mono font-semibold text-vermillion">Job description</span>
               <span className="font-mono text-xs text-muted-foreground">{jd.length} ch</span>
             </header>
             <textarea
               value={jd}
               onChange={(e) => setJd(e.target.value)}
-              className="w-full h-64 p-4 bg-transparent text-sm font-mono resize-none outline-none focus:bg-vermillion-soft/20 transition"
+              className="w-full flex-1 p-4 bg-transparent text-sm font-mono resize-none outline-none focus:bg-vermillion-soft/20 transition overflow-y-auto"
               spellCheck={false}
             />
-            <footer className="px-4 py-2 border-t border-rule bg-paper-deep flex justify-between text-xs text-muted-foreground">
+            <footer className="px-4 py-2 border-t border-rule bg-paper-deep flex justify-between text-xs text-muted-foreground shrink-0">
               <span>Seniority: <b className="text-ink">{parsedJd.seniority}</b></span>
               <span>Exp: <b className="text-ink">{parsedJd.preferredExperienceYears}+ yrs</b></span>
             </footer>
           </section>
 
-          <section className="border border-rule bg-paper">
-            <header className="px-4 py-3 border-b border-rule eyebrow text-xs uppercase tracking-wider font-mono">Signal weights</header>
-            <div className="p-4 space-y-5">
+          <section className="border border-rule bg-paper flex flex-col flex-1 overflow-hidden min-h-[220px]">
+            <header className="px-4 py-3 border-b border-rule eyebrow text-xs uppercase tracking-wider font-mono font-semibold text-vermillion shrink-0">Signal weights</header>
+            <div className="p-4 space-y-5 overflow-y-auto flex-1">
               {[
                 { key: "semanticFit", label: "Semantic fit" },
                 { key: "leadershipImportance", label: "Leadership importance" },
@@ -148,7 +188,7 @@ function AppPage() {
                     max={100}
                     value={weights[key as keyof SignalWeights]}
                     onChange={(e) => handleSliderChange(key as keyof SignalWeights, Number(e.target.value))}
-                    className="w-full accent-vermillion"
+                    className="w-full accent-vermillion cursor-pointer"
                   />
                 </div>
               ))}
@@ -157,10 +197,10 @@ function AppPage() {
         </aside>
 
         {/* MIDDLE — ranking */}
-        <main className="col-span-12 lg:col-span-5">
-          <div className="flex items-end justify-between mb-4">
+        <main className="col-span-12 lg:col-span-5 flex flex-col h-full overflow-hidden">
+          <div className="flex items-end justify-between mb-4 shrink-0">
             <div>
-              <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono">Tournament results</div>
+              <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold">Tournament results</div>
               <h2 className="font-display text-3xl mt-1">The bracket</h2>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -168,15 +208,16 @@ function AppPage() {
             </div>
           </div>
 
-          <ol className="border border-rule bg-paper">
+          <ol className="border border-rule bg-paper overflow-y-auto flex-1">
             {tournamentResults.map((r, i) => {
               const isSel = r.candidate.id === selectedId;
               const isTop = i === 0;
+              const isShortlisted = shortlistedIds.includes(r.candidate.id);
               return (
                 <li key={r.candidate.id}>
                   <button
                     onClick={() => setSelectedId(r.candidate.id)}
-                    className={`w-full text-left grid grid-cols-12 gap-3 items-center px-4 py-4 border-b border-rule last:border-0 transition-all ${
+                    className={`w-full text-left grid grid-cols-12 gap-3 items-center px-4 py-4 border-b border-rule last:border-0 transition-all cursor-pointer ${
                       isSel ? "bg-ink text-paper" : "hover:bg-paper-deep"
                     }`}
                   >
@@ -184,8 +225,15 @@ function AppPage() {
                       {isTop && !isSel ? <span className="text-vermillion">{(i + 1).toString().padStart(2, "0")}</span> : (i + 1).toString().padStart(2, "0")}
                     </div>
                     <div className="col-span-7">
-                      <div className="font-display text-lg leading-tight flex items-center gap-2">
+                      <div className="font-display text-lg leading-tight flex items-center gap-2 flex-wrap">
                         {r.candidate.name}
+                        {isShortlisted && (
+                          <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider ${
+                            isSel ? "bg-emerald-600 text-white font-semibold" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          }`}>
+                            Shortlisted
+                          </span>
+                        )}
                         {r.candidate.activity.urgency === "high" && (
                           <span className={`text-[0.6rem] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider ${
                             isSel ? "bg-vermillion text-paper" : "bg-vermillion-soft text-vermillion"
@@ -211,11 +259,11 @@ function AppPage() {
         </main>
 
         {/* RIGHT — scorecard */}
-        <section className="col-span-12 lg:col-span-4">
-          <div className="border border-rule sticky top-24 bg-paper">
-            <header className="border-b border-rule p-5">
+        <section className="col-span-12 lg:col-span-4 h-full overflow-hidden">
+          <div className="border border-rule bg-paper h-full flex flex-col overflow-hidden">
+            <header className="border-b border-rule p-5 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono">Scorecard</span>
+                <span className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold">Scorecard</span>
                 <span className="font-mono text-xs text-muted-foreground">#{c.id.toUpperCase()}</span>
               </div>
               <h3 className="font-display text-3xl mt-2 leading-tight">{c.name}</h3>
@@ -226,12 +274,12 @@ function AppPage() {
 
               <div className="mt-5 flex items-baseline gap-3">
                 <div className="font-display text-6xl text-vermillion">{selected.breakdown.overallWeightedScore}</div>
-                <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono">/ 100 composite</div>
+                <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono font-semibold">/ 100 composite</div>
               </div>
             </header>
 
             {/* tabs */}
-            <div className="flex border-b border-rule bg-paper-deep">
+            <div className="flex border-b border-rule bg-paper-deep shrink-0">
               {([
                 ["profile", User],
                 ["graph", Network],
@@ -240,7 +288,7 @@ function AppPage() {
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  className={`flex-1 px-3 py-3 text-sm flex items-center justify-center gap-1.5 capitalize border-b-2 -mb-px transition-colors ${
+                  className={`flex-1 px-3 py-3 text-sm flex items-center justify-center gap-1.5 capitalize border-b-2 -mb-px transition-colors cursor-pointer ${
                     tab === t ? "border-vermillion text-ink font-medium" : "border-transparent text-muted-foreground hover:text-ink"
                   }`}
                 >
@@ -250,7 +298,7 @@ function AppPage() {
               ))}
             </div>
 
-            <div className="p-5 max-h-[580px] overflow-y-auto space-y-6">
+            <div className="p-5 flex-1 overflow-y-auto space-y-6">
               {tab === "profile" && (
                 <div className="space-y-6">
                   <p className="text-sm leading-relaxed">{c.bio}</p>
@@ -263,14 +311,14 @@ function AppPage() {
 
                   {/* Recruiter Insight Box */}
                   <div className="p-4 border border-rule bg-paper-deep text-sm space-y-1">
-                    <span className="eyebrow text-vermillion text-[0.65rem] uppercase tracking-wider font-mono block">Recruiter Insight</span>
+                    <span className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold block">Recruiter Insight</span>
                     <p className="leading-relaxed text-xs text-muted-foreground">{selected.recruiterInsight}</p>
                   </div>
 
                   {/* Transferable Skills Mapping */}
                   {selected.transferableSkillsMapped.length > 0 && (
                     <div className="p-4 border border-vermillion/40 bg-vermillion-soft/20 text-sm space-y-2">
-                      <span className="eyebrow text-vermillion text-[0.65rem] uppercase tracking-wider font-mono block">Transferable Skills Mapped</span>
+                      <span className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold block">Transferable Skills Mapped</span>
                       {selected.transferableSkillsMapped.map((t, idx) => (
                         <div key={idx} className="text-xs space-y-1">
                           <div>Candidate background in <b className="text-ink">{t.sourceSkill}</b> bridges requirements for <b className="text-ink">{t.targetSkill}</b>:</div>
@@ -305,7 +353,7 @@ function AppPage() {
               {tab === "graph" && (
                 <div className="space-y-6">
                   <div>
-                    <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono">Requirement Graph match</div>
+                    <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold">Requirement Graph match</div>
                     <p className="text-xs text-muted-foreground mt-1">Real-time mapping of parsed JD parameters and skills.</p>
                   </div>
 
@@ -383,7 +431,7 @@ function AppPage() {
 
                   {/* 8-Factor detailed score meters */}
                   <div className="space-y-4 pt-2 border-t border-rule">
-                    <span className="eyebrow text-xs uppercase tracking-wider font-mono text-muted-foreground block">8-Factor scorecard breakdown</span>
+                    <span className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold block">8-Factor scorecard breakdown</span>
                     {[
                       ["Semantic Fit", selected.breakdown.semanticFitScore],
                       ["Seniority Alignment", selected.breakdown.seniorityAlignmentScore],
@@ -427,7 +475,7 @@ function AppPage() {
 
               {tab === "tournament" && (
                 <div className="space-y-5">
-                  <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono">Tournament Match Record</div>
+                  <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold">Tournament Match Record</div>
                   
                   {/* Tournament ELO Standings details */}
                   <div className="p-4 border border-rule bg-paper-deep space-y-2 rounded">
@@ -445,7 +493,7 @@ function AppPage() {
                     </div>
                   </div>
 
-                  <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono">Career rounds & highlights</div>
+                  <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold">Career rounds & highlights</div>
                   {c.careerHistory.map((h, i) => (
                     <div key={i} className="border-l border-rule pl-4 space-y-1 relative">
                       <div className="absolute top-1.5 left-[-3.5px] w-1.5 h-1.5 rounded-full bg-vermillion" />
@@ -461,7 +509,7 @@ function AppPage() {
                   ))}
 
                   <div className="pt-4 border-t border-rule">
-                    <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono mb-2">GitHub footprint</div>
+                    <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold mb-2">GitHub footprint</div>
                     <ul className="text-sm space-y-1.5">
                       <Row k="Repositories" v={c.github.repos} />
                       <Row k="Stars earned" v={c.github.stars} />
@@ -472,9 +520,20 @@ function AppPage() {
               )}
             </div>
 
-            <footer className="border-t border-rule p-4 flex items-center gap-3 bg-paper-deep">
-              <button className="ink-button flex-1 justify-center text-sm flex items-center gap-2">
-                Shortlist Candidate <CheckCircle2 className="h-4 w-4" />
+            <footer className="border-t border-rule p-4 flex items-center gap-3 bg-paper-deep shrink-0">
+              <button 
+                onClick={() => toggleShortlist(c.id)}
+                className={`ink-button flex-1 justify-center text-sm flex items-center gap-2 transition-colors cursor-pointer ${
+                  shortlistedIds.includes(c.id) 
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                    : ""
+                }`}
+              >
+                {shortlistedIds.includes(c.id) ? (
+                  <>Shortlisted <CheckCircle2 className="h-4 w-4 fill-current" /></>
+                ) : (
+                  <>Shortlist Candidate <CheckCircle2 className="h-4 w-4" /></>
+                )}
               </button>
             </footer>
           </div>
@@ -496,8 +555,8 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 function Section({ title, icon: Icon, children }: { title: string; icon: typeof User; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <div className="eyebrow text-muted-foreground text-xs uppercase tracking-wider font-mono flex items-center gap-1.5">
-        <Icon className="h-3.5 w-3.5" /> {title}
+      <div className="eyebrow text-vermillion text-xs uppercase tracking-wider font-mono font-semibold flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-vermillion" /> {title}
       </div>
       {children}
     </div>
